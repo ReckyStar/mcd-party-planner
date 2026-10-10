@@ -1,0 +1,18 @@
+# 凭据保护——本文件不参与提交
+mcp.json
+mcp-config.json
+*.token
+probe-results.json
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# 编辑器与系统
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp

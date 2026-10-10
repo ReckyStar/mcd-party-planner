@@ -1,0 +1,205 @@
+{
+  "schema_version": "1",
+  "capabilities": [
+    "store-locate",
+    "coupon-query",
+    "menu-price",
+    "promotion-rule",
+    "nutrition-filter",
+    "coupon-claim"
+  ],
+  "dependencies": [
+    {
+      "id": "mcd-mcp",
+      "type": "mcp",
+      "required": true,
+      "auth_type": "token",
+      "capabilities": [
+        "store-locate",
+        "coupon-query",
+        "menu-price",
+        "promotion-rule",
+        "nutrition-filter",
+        "coupon-claim"
+      ],
+      "checks": [
+        {
+          "id": "mcd-registered",
+          "type": "mcp",
+          "required": true,
+          "server": "mcd-mcp"
+        },
+        {
+          "id": "mcd-connectivity",
+          "type": "mcp_probe",
+          "required": true,
+          "target": "now-time-info"
+        },
+        {
+          "id": "mcd-credential-valid",
+          "type": "auth_probe",
+          "required": true,
+          "target": "mcd-mcp"
+        }
+      ],
+      "setup": {
+        "official_home_url": "https://open.mcd.cn/mcp",
+        "official_docs_url": "https://github.com/M-China/mcd-mcp-server",
+        "download_url": "https://open.mcd.cn/mcp",
+        "login_url": "https://open.mcd.cn/mcp",
+        "credential_url": "https://open.mcd.cn/mcp",
+        "console_path": [
+          "控制台",
+          "激活",
+          "同意服务协议",
+          "一键复制 MCP Token"
+        ],
+        "scopes": [
+          "MCP Token 仅用于 mcp.mcd.cn 的查询类工具调用"
+        ],
+        "credential_storage": "~/.workbuddy/mcp.json 的 mcpServers.mcd-mcp.headers.Authorization 字段，字段值形如 Bearer <token>",
+        "steps": [
+          "使用中国大陆手机号登录 https://open.mcd.cn/mcp",
+          "点击右上角控制台",
+          "点击激活按钮申请 MCP Token",
+          "阅读并同意服务协议",
+          "复制生成的 Token",
+          "在 WorkBuddy 侧边栏专家·技能·连接器中选择连接器页签",
+          "点击右上角自定义连接器并选择配置 MCP",
+          "填入 url 为 https://mcp.mcd.cn、type 为 streamablehttp、headers.Authorization 为 Bearer 加实际 Token 的配置",
+          "点击保存后在自定义连接器列表中启用 mcd-mcp",
+          "在连接器管理页右上角的自定义连接器入口点击信任以激活该连接器"
+        ],
+        "verify": "在 WorkBuddy 对话框请求调用 now-time-info，返回当前服务器时间即为连通成功",
+        "rotate_or_revoke": "轮换：重新登录 https://open.mcd.cn/mcp，在控制台按官方流程重新申请 Token，替换 ~/.workbuddy/mcp.json 中的 Authorization 值后重新启用并信任连接器。撤销：通过 https://open.mcd.cn/mcp 控制台的官方入口申请撤销，撤销后所有功能立即不可用",
+        "security": "Token 等同密码级凭证。只保存在 ~/.workbuddy/mcp.json，不写入源码、脚本、文档或 Git 仓库，不在对话中粘贴完整 Token。公开仓库的配置示例只允许使用环境变量占位符",
+        "verified_at": "2026-10-10",
+        "applies_to_version": "活动期内麦当劳中国 MCP 服务版本"
+      },
+      "degradation": [
+        {
+          "capability": "store-locate",
+          "trigger": "query-nearby-stores 或 delivery-query-stores 调用失败、超时或返回空列表",
+          "fallback": "请用户口述已知门店名称或位置关键词，跳过检索直接进入菜单与优惠查询，并标注门店信息来自用户口述",
+          "user_input": "门店名称或所在位置",
+          "limitations": "无法确认配送距离与营业状态，凑单建议基于用户口述的门店菜单，可能与实际不符",
+          "evidence_label": "部分验证",
+          "recovery": "重新调用门店检索工具；连续失败时检查网络与 MCP 连接状态，必要时按配置指南重新申请 Token",
+          "stop_condition": "用户无法提供任何门店信息，且门店检索连续三次失败时停止，提示稍后重试"
+        },
+        {
+          "capability": "coupon-query",
+          "trigger": "query-store-coupons 或 available-coupons 调用失败或返回空列表",
+          "fallback": "跳过优惠券环节，方案仅基于菜单原价与门店满减规则计算，并在输出中说明未能获取优惠券",
+          "user_input": "无",
+          "limitations": "到手价会高于实际结算价，优惠金额不完整，无法确认用户可用的券",
+          "evidence_label": "部分验证",
+          "recovery": "重新调用优惠券工具；持续失败时提示用户在麦乐送或麦当劳小程序查看卡包券",
+          "stop_condition": "无法获取任何优惠信息且用户明确要求含优惠的方案时停止"
+        },
+        {
+          "capability": "menu-price",
+          "trigger": "query-meals 调用失败，或返回结果中缺少所需品项的 productCode",
+          "fallback": "请用户口述想吃的品项名称，基于营养数据给出同类品项的替代建议，并标注价格需现场确认",
+          "user_input": "想吃的品项名称或套餐构成",
+          "limitations": "无法生成含准确价格的方案，也无法调用 calculate-price 验算总价，人均为估算值",
+          "evidence_label": "未验证",
+          "recovery": "重新调用 query-meals；连续失败时确认门店编码是否正确",
+          "stop_condition": "菜单与价格均无法获取时停止，不输出任何价格数字"
+        },
+        {
+          "capability": "promotion-rule",
+          "trigger": "query-promotions 调用失败，或当前链路不是企业团餐场景导致工具不可用",
+          "fallback": "跳过门店满减，仅使用优惠券计算优惠；在输出中说明当前链路无法获取满减规则",
+          "user_input": "无",
+          "limitations": "到手价可能高于实际结算价，凑单建议不覆盖满减门槛",
+          "evidence_label": "部分验证",
+          "recovery": "企业团餐场景下重新调用 query-promotions；非团餐场景需改为团餐链路才能获取该规则",
+          "stop_condition": "无"
+        },
+        {
+          "capability": "nutrition-filter",
+          "trigger": "list-nutrition-foods 或 list-nutrition-foods 调用失败或无对应品项数据",
+          "fallback": "只基于品项名称给出忌口与人群替换建议，并标注无营养数据支撑",
+          "user_input": "需替换的品项与替换原因",
+          "limitations": "无法给出热量与营养素数据，儿童餐与特殊人群的搭配缺少数据依据",
+          "evidence_label": "未验证",
+          "recovery": "重新调用营养数据工具；持续失败时提示用户以门店公示的营养成分为准",
+          "stop_condition": "用户要求精确营养数据且工具持续不可用时停止该部分，方案其余部分照常输出"
+        },
+        {
+          "capability": "coupon-claim",
+          "trigger": "用户要求领券但 auto-bind-coupons 调用失败或未授权",
+          "fallback": "不声称已领取，改为提供领券入口说明：打开麦乐送或麦当劳小程序进入优惠券页面自行领取",
+          "user_input": "无",
+          "limitations": "券未实际到账，后续 calculate-price 可能无法应用该券",
+          "evidence_label": "未验证",
+          "recovery": "重新调用 auto-bind-coupons；持续失败时检查 Token 权限与账号授权状态",
+          "stop_condition": "无"
+        }
+      ]
+    }
+  ],
+  "functional_degradations": [
+    {
+      "capability": "store-locate",
+      "trigger": "门店检索工具调用失败、超时或返回空列表",
+      "fallback": "请用户口述门店名称或位置关键词，跳过检索直接进入菜单与优惠查询，并标注门店信息来自用户口述而非系统检索",
+      "user_input": "门店名称或所在位置关键词",
+      "limitations": "无法确认配送距离、营业状态与实际在售菜单，凑单建议可能与门店实际情况不符",
+      "evidence_label": "部分验证",
+      "recovery": "重新调用 query-nearby-stores 或 delivery-query-stores；连续失败时检查网络与 MCP 连接状态",
+      "stop_condition": "用户无法提供任何门店信息且检索连续三次失败时停止，提示稍后重试"
+    },
+    {
+      "capability": "coupon-query",
+      "trigger": "query-store-coupons 与 available-coupons 均调用失败或返回空列表",
+      "fallback": "跳过优惠券环节，方案仅基于菜单原价与门店满减规则计算，并在输出中明确说明未能获取优惠券",
+      "user_input": "无",
+      "limitations": "到手价会高于实际结算价，优惠金额不完整，无法确认用户卡包中的可用券",
+      "evidence_label": "部分验证",
+      "recovery": "重新调用优惠券查询工具；持续失败时提示用户在麦乐送或麦当劳小程序查看卡包券",
+      "stop_condition": "无法获取任何优惠信息且用户明确要求必须含优惠券的方案时停止"
+    },
+    {
+      "capability": "menu-price",
+      "trigger": "query-meals 调用失败，或返回结果中缺少所需品项的 productCode",
+      "fallback": "请用户口述想吃的品项名称，基于营养数据给出同类替代建议，并标注价格需现场确认",
+      "user_input": "想吃的品项名称或套餐构成",
+      "limitations": "无法生成含准确价格的方案，无法调用 calculate-price 验算总价，人均金额为估算值",
+      "evidence_label": "未验证",
+      "recovery": "重新调用 query-meals；连续失败时确认 storeCode 是否正确、门店是否支持当前链路",
+      "stop_condition": "菜单与价格均无法获取时停止，不输出任何价格数字"
+    },
+    {
+      "capability": "promotion-rule",
+      "trigger": "query-promotions 调用失败，或当前链路非企业团餐场景导致工具不可用",
+      "fallback": "跳过门店满减，仅基于优惠券计算优惠，在输出中说明当前链路无法获取满减规则",
+      "user_input": "无",
+      "limitations": "到手价可能高于实际结算价，凑单建议不覆盖满减门槛",
+      "evidence_label": "部分验证",
+      "recovery": "企业团餐场景下重新调用 query-promotions；其他链路需改为团餐方式才能获取该规则",
+      "stop_condition": "无"
+    },
+    {
+      "capability": "nutrition-filter",
+      "trigger": "list-nutrition-foods 或 list-nutrition-foods 调用失败，或无对应品项的营养数据",
+      "fallback": "只基于品项名称给出忌口与人群替换建议，并标注该建议无营养数据支撑",
+      "user_input": "需要替换的品项与替换原因，例如忌口、儿童餐、老人餐",
+      "limitations": "无法给出热量、蛋白质、脂肪、碳水化合物、钠、钙等数据，儿童餐与特殊人群搭配缺少数据依据",
+      "evidence_label": "未验证",
+      "recovery": "重新调用营养数据工具；持续失败时提示用户以门店公示的营养成分为准",
+      "stop_condition": "用户要求精确营养数据且工具持续不可用时停止该部分，方案其余部分照常输出"
+    },
+    {
+      "capability": "coupon-claim",
+      "trigger": "用户明确要求领券但 auto-bind-coupons 调用失败、未授权或被拒绝",
+      "fallback": "不声称已领取，改为提供领券入口说明：打开麦乐送或麦当劳小程序进入优惠券页面自行领取",
+      "user_input": "无",
+      "limitations": "券未实际到账，后续 calculate-price 可能无法应用该券，优惠金额会偏高",
+      "evidence_label": "未验证",
+      "recovery": "重新调用 auto-bind-coupons；持续失败时检查 Token 权限范围与账号授权状态",
+      "stop_condition": "无"
+    }
+  ]
+}
